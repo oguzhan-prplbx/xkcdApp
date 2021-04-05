@@ -81,19 +81,34 @@ prefix = 'xkcdapp'
 env = 'test'
 prefixenv = f"/{prefix}/{env}/"
 
-SECRET_KEY = ssm.get_parameter(Name=prefixenv + "DJANGO_SECRET_KEY")['Parameter']['Value'] #'20nc8pm#1w1q$7de=+od3w&-8-m)s!lgy@81hwg&rqqto&5sun'
+SECRET_KEY = ssm.get_parameter(Name=prefixenv + "DJANGO_SECRET_KEY", WithDecryption=True)['Parameter']['Value']
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': ssm.get_parameter(Name=prefixenv + "DATABASE_NAME")['Parameter']['Value'],
-        'USER': ssm.get_parameter(Name=prefixenv + "DATABASE_USER")['Parameter']['Value'],
-        'PASSWORD': ssm.get_parameter(Name=prefixenv + "DATABASE_PASSWORD")['Parameter']['Value'],
-        'HOST': ssm.get_parameter(Name=prefixenv + "DATABASE_HOST")['Parameter']['Value'],
+        'NAME': ssm.get_parameter(Name=prefixenv + "DATABASE_NAME", WithDecryption=True)['Parameter']['Value'],
+        'USER': ssm.get_parameter(Name=prefixenv + "DATABASE_USER", WithDecryption=True)['Parameter']['Value'],
+        'PASSWORD': ssm.get_parameter(Name=prefixenv + "DATABASE_PASSWORD", WithDecryption=True)['Parameter']['Value'],
+        'HOST': ssm.get_parameter(Name=prefixenv + "DATABASE_HOST", WithDecryption=True)['Parameter']['Value'],
         'PORT': '5432'
     }
 }
 
+# ELASTICACHE_ENDPOINT without the port 
+ELASTICACHE_ENDPOINT = ssm.get_parameter(Name=prefixenv + "ELASTICACHE_ENDPOINT", WithDecryption=True)['Parameter']['Value']
+CACHE_LOCATION =  f"redis://{ELASTICACHE_ENDPOINT}/0"
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": CACHE_LOCATION,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+#Use the redis as Session storage as well.
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
