@@ -1,7 +1,16 @@
-# xkcdApp
+# Ultimate Guide to Deploying Django at Scale on AWS Elastic Container Service
 
 
 ## Overview
+
+
+### problems:
+session
+database
+logs
+
+
+### Pre requisites
 
 we are going to use [xkcd library](https://pypi.org/project/xkcd/#description)
 
@@ -104,7 +113,17 @@ python manage.py makemigrations xkcd_app
 python manage.py migrate xkcd_app
 ```
 
+#### adding models to django admin page
 
+create a `admin.py` file under `xkcd_app/xkcd_app`
+
+```python
+#xkcd_app/xkcd_app/admin.py
+from django.contrib import admin
+from .models import XKCDComicViews
+
+admin.site.register(XKCDComicViews)
+```
 
 #### creating homepage view
 Let's create `views.py` under our xkcd_app.
@@ -192,6 +211,7 @@ xkcd
 django
 psycopg2-binary
 gunicorn
+django-redis
 ```
 
 ### Dockerizing our Django App
@@ -217,23 +237,30 @@ COPY xkcd_app/ .
 # exposing our django port: 8000
 EXPOSE 8000
 
-# serving django with gunicorn on port 8000 (1 worker, timeout of 5 secs)
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "5", "xkcd_app.wsgi"]
+# serving django with gunicorn on port 8000 (1 worker, timeout of 15 secs)
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "15", "xkcd_app.wsgi"]
 ```
 
-#### Accessing Containers Shell for Debugging Purposes
+#### testing the Docker Image
 
-First we need the container ID.
+Let's build and run our docker image.
+
 ```bash
-❯ docker ps
-CONTAINER ID   IMAGE         COMMAND                  CREATED          STATUS          PORTS                    NAMES
-f99841abbe11   xkcd:latest   "gunicorn --bind 0.0…"   18 minutes ago   Up 18 minutes   0.0.0.0:8000->8000/tcp   affectionate_cray
+# build the image with the latest tag
+docker build -t xkcd:latest .  
+
+# run the image with port mapping 8000 to 8000
+docker run -p 8000:8000 xkcd:latest
+
+# output should look something like this.
+# ... [1] [INFO] Starting gunicorn 20.1.0
+# ... [1] [INFO] Listening at: http://0.0.0.0:8000 (1)
+# ... [1] [INFO] Using worker: sync
+# ... [8] [INFO] Booting worker with pid: 8
 ```
-Then we can execute `bash` on that container ID, which will give us a shell on the container. 
-```bash
-❯ docker exec -ti f99841abbe11  bash 
-root@f99841abbe11:/opt# 
-```
+If everything goes well, you can go to [http://0.0.0.0:8000](http://0.0.0.0:8000) or [http://localhost:8000](http://localhost:8000) to see XKCD app working.
+
+
 
 ## AWS
 
@@ -253,6 +280,8 @@ On AWS Console, go to `Security Groups` under the `VPC` service. Press Create Se
 
 #### creating a Postgresql Database on RDS 
 On AWS Console, go to `RDS` and start to create a new RDS instance. RDS creation settings below uses default VPC and Free-tier. Feel free to change the configuration according to your requirements.
+<details open>
+  <summary> <b> Table of Configuration </b></summary>
 
 |Setting  | Option | Detail |
 | -- | -- | -- | 
@@ -260,7 +289,7 @@ On AWS Console, go to `RDS` and start to create a new RDS instance. RDS creation
 | Engine Option | PostgreSQL | |
 | Engine Version | 12.5-R1 | Specify your DB engine version. |
 | Templates | Free Tier | If you are building for prod or test envs, choose respectively.|
-| DB Instance Identifier | xkcddb | |
+| DB Instance Identifier | xkcdappdb | |
 | Master Username | postgres | |
 | Master Password | < redacted > | |
 | DB Instance Class | db.t2.micro | you can upgrade the instance class to your needs. |
@@ -270,15 +299,79 @@ On AWS Console, go to `RDS` and start to create a new RDS instance. RDS creation
 | Multi-AZ Deployment | False | This feature not included in the free-tier. Production environments would benefit from this feature. |
 | VPC | Default VPC | Ideally you should create your own VPC and choose that. |
 | Subnet Group | default | |
-| Public Access | No | If you are testing things, you can enable this feature and experiment. Not recommended for production apps.|
+| Public Access | Yes | We will turn this feature off later. We need public access only in the first setup to test things. |
 | VPC Security Group |Delete default and choose existing: `xkcdAppRDSSecurityGroup` | |
 | Availability Zone | eu-west-2a | Choose one AZ if you are on free-tier.|
 | Database Authentication | Password Authentication | |
+| Initial Database Name | xkcd_test_db | **Initial Database Name** field has to be filled or the AWS will not create a database inside the RDS instance. If you fail to fill this field, you will have to manually create the database.|
 
-##### acquiring the database connection credentials
-Wait for the database creation to be complete. Go to `xkcddb` on `RDS > Databases` and then go to `Configuration` tab. 
+</details>
 
-![Configuration Panel of xkcddb database on RDS](assets/aws/rds_configuration_detail.png)
+
+<details>
+  <summary> <b> Database Engine </b></summary>
+
+![Choosing Database Engine: PostgreSQL](assets/aws/rds_1.png)
+
+</details>
+<details>
+  <summary> <b> RDS Creation Template </b></summary>
+
+![Selecting Template: Standard](assets/aws/rds_2.png)
+
+</details>
+<details>
+  <summary> <b> Database Settings and Credentials </b></summary>
+
+![Selecting Template: Standard](assets/aws/rds_3.png)
+
+</details>
+
+<details>
+  <summary><b> Database Instance Class  </b></summary>
+
+![Database Instance Class: t2.micro](assets/aws/rds_4.png)
+
+</details>
+<details>
+  <summary><b> Database Storage </b></summary>
+
+![Database Storage: 20GB SSD](assets/aws/rds_5.png)
+
+</details>
+<details>
+  <summary><b> Connectivity  </b></summary>
+
+Be sure to select Public Access: Yes. We will need to access the database publicly in the first setup, but we will turn it off later.
+![Database Connectivity Settings](assets/aws/rds_7.png)
+
+</details>
+<details>
+  <summary><b>  Database Authentication </b></summary>
+
+![Database Authentication: Password authentication](assets/aws/rds_8.png)
+
+</details>
+<details open>
+  <summary><b> Additional Configuration  </b></summary>
+
+
+</br>
+
+> **_NOTE:_**  **Initial Database Name** field has to be filled or the AWS will not create a database inside the RDS instance you are creating. If you fail to fill this field, you will have to manually create the database.
+
+
+![Additional Configuration](assets/aws/rds_9.png)
+
+</details>
+
+</details>
+<details>
+  <summary><b>  Acquiring the Database Connection Endpoint </b></summary>
+
+Wait for the database creation to be complete. Go to `xkcdappdb` on `RDS > Databases` and then go to `Connectivity & Security` tab. 
+
+</details>
 
 #### updating django settings to use the PostgreSQL Database Backend
 
@@ -287,11 +380,13 @@ Wait for the database creation to be complete. Go to `xkcddb` on `RDS > Database
 # be sure to activate the venv environment
 pip install psycopg2-binary
 ```
+
+
 ##### update the settings.py
 ```python
 #/xkcd_app/xkcd_app/settings.py
 import os
-########
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -305,7 +400,7 @@ DATABASES = {
 
 ```
 
-Using environment variables for application configuration is not a secure way of doing things. Integrating AWS Parameter Store to our `settings.py` file is something easy. Let's configure AWS Systems Manager Parameter Store for XKCD App.
+Using environment variables for application configuration **is not a secure way** of doing things. Integrating AWS Parameter Store to our `settings.py` file is something easy. Let's configure AWS Systems Manager Parameter Store for XKCD App.
 
 ### Parameter Store
 
@@ -324,16 +419,27 @@ For **DATABASE_NAME** parameter, you can create a parameter as following:
 | Type | SecureString | This type of parameters are going to be encrypted while sitting. |
 | KMS key source | My Current Account |  |
 | KMS Key ID | alias/aws/ssm | Choose the default AWS managed key. This will allow ECS containers to access to parameters without further configuration. |
-| Value | xkcddb  | |
+| Value | xkcddb_test_db  | Type the database name you gave in the RDS Creation: Additional Configuration step. |
 
-Follow the same steps to add the remaining database connection credentials to paramater store. You may also want to add `SECRET_KEY` variable generated for your django project. Django's `SECRET_KEY` is used for encryption inside Django. 
+Follow the same steps to add the remaining database connection credentials to paramater store. You may also want to add `SECRET_KEY` variable generated for your Django project. Django's `SECRET_KEY` is used for encryption inside Django. 
 
 When you are finished with adding the secrets, you should see something like this on Parameter Store Console.
 
 ![Parameter Store Console](assets/aws/parameter_store_complete.png)
 
-#### configuring settings.py to use AWS Parameter Store
+You can check the existence of parameters with AWS CLI, if you have it set up.
+```bash
+aws ssm get-parameters --name "/xkcdapp/test/DATABASE_HOST" --with-decryption --region <your_region> --profile <your_aws_cli_profile>
+```
 
+#### configuring Django App to use AWS Parameter Store
+
+##### install AWS SDK for Python: boto3
+```bash
+# be sure to be in the venv virtual environment
+pip install boto3
+```
+##### update the settings.py file
 
 ```python
 # xkcd_app/xkcd_app/settings.py
@@ -344,25 +450,54 @@ prefix = 'xkcdapp'
 env = 'test'
 prefixenv = f"/{prefix}/{env}/"
 
-SECRET_KEY = ssm.get_parameter(Name=prefixenv + "DJANGO_SECRET_KEY")['Parameter']['Value']
+SECRET_KEY = ssm.get_parameter(Name=prefixenv + "DJANGO_SECRET_KEY", WithDecryption=True)['Parameter']['Value'] 
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': ssm.get_parameter(Name=prefixenv + "DATABASE_NAME")['Parameter']['Value'],
-        'USER': ssm.get_parameter(Name=prefixenv + "DATABASE_USER")['Parameter']['Value'],
-        'PASSWORD': ssm.get_parameter(Name=prefixenv + "DATABASE_PASSWORD")['Parameter']['Value'],
-        'HOST': ssm.get_parameter(Name=prefixenv + "DATABASE_HOST")['Parameter']['Value'],
+        'NAME': ssm.get_parameter(Name=prefixenv + "DATABASE_NAME", WithDecryption=True)['Parameter']['Value'],
+        'USER': ssm.get_parameter(Name=prefixenv + "DATABASE_USER", WithDecryption=True)['Parameter']['Value'],
+        'PASSWORD': ssm.get_parameter(Name=prefixenv + "DATABASE_PASSWORD", WithDecryption=True)['Parameter']['Value'],
+        'HOST': ssm.get_parameter(Name=prefixenv + "DATABASE_HOST", WithDecryption=True)['Parameter']['Value'],
         'PORT': '5432'
     }
 }
-
 ```
 
-##### install AWS SDK for Python: boto3
+#### migrating django models to RDS instance
+
+> **_NOTE:_** : Be sure that your AWS Accounts credentials are set in the AWS CLI's `credentials` file.
+
+Migrate our migrations to AWS RDS.
 ```bash
-pip install boto3
+python manage.py migrate
+
+# Operations to perform:
+#   Apply all migrations: admin, auth, contenttypes, sessions, xkcd_app
+# Running migrations:
+#   Applying contenttypes.0001_initial... OK
+#   Applying auth.0001_initial... OK
+#   .
+#   .
+#   Applying sessions.0001_initial... OK
+#   Applying xkcd_app.0001_initial... OK
 ```
+#####
+
+
+##### run the docker image with the aws credentials
+If you want to build and test the docker image with the application secrets on the AWS Parameter Store:
+1. build the image again to apply the `settings.py` file changes to docker image.
+2. run the image with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` environment variables set. 
+```bash
+# build the image again
+docker build -t xkcd:latest .  
+
+# run with AWS credentials set in the environment variables.
+docker run -p 8000:8000 -e AWS_ACCESS_KEY_ID='XXXXXXXXXXXX' -e AWS_SECRET_ACCESS_KEY='YYYYYYYYYYY' xkcd:latest
+```
+
+
 
 #### creating parameter store IAM Role
 Go to `Roles` under `AWS IAM` and  click on **Create Role**.
@@ -409,18 +544,186 @@ Give a name and description to Parameter Store access role.
 | Name | SystemsManagerParameterStoreFullAccess | 
 | Description | Systems Manager Parameter Store Full Access Role. | 
 
-We will be attaching this IAM Role to ECS containers we are going to run. So they can read the parameters.
-#### migrating django models to RDS
+We will be attaching this IAM Role to ECS containers we are going to run to allow them to read the parameters.
+
+
+#####creating a super user
+```bash
+python3 manage.py createsuperuser
+```
+
 
 ### ElastiCache Redis
-#### creating security group, IAM Role
-#### adding endpoint to parameterstore
-#### django dependency + settings file
-### Elastic Container Registry
-#### uploading docker image to ECR
 
+#### Creating the Security Group: XKCDAppElastiCacheSecurityGroup
+
+![Elasti Cache Redis Security Group Creation](assets/aws/elasticache_sg.png)
+
+| Setting | Option |
+|-- |-- |
+| Name | XKCDAppElastiCacheSecurityGroup |
+| Description | XKCD Apps elasti cache security group. Allows access from port:  6379 |
+| VPC | Select your VPC, or use the default one. |
+| Inbound Rules | Type: `CustomTCP`, Port Range: `6379`, Source: `Anywhere` |
+| Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
+
+#### Creating the ElastiCache Redis Instance
+Go to `Redis` under `ElastiCache` and press create button.
+
+
+<details open>
+  <summary><b> Table of Configuration </b></summary>
+
+| Setting | Option | Detail |
+| --| --| --|
+| Cluster Engine | Redis, Cluster Mode Disabled |  |
+| Location | Amazon Cloud | |
+| Name | xkcdappredis | |
+| Description| Session storage for XKCD App | |
+|Engine version compatibility | 6.x | |
+| Port| **6379**| |
+| Parameter group| default.redis6.x| |
+| Node type| **cache.t2.micro (0.5 GiB)** | |
+| Number of replicas| 0 | |
+| Multi-AZ | False | |
+| Subnet Group| Create new| |
+| Subnet Group Name| ecachesubnetgroup | |
+| Subnet Group Description | Subnet group for XKCD apps ElastiCache Redis Storage.| |
+| Subnet Group VPC ID | Default VPC ID | You can choose your own VPC. |
+| Subnet Group Subnets | 2c, 2a, 2b  | Select subnets for your VPC. |
+| Subnet Group AZ Placement | No preference| |
+| Security Group | XKCDAppElastiCacheSecurityGroup | |
+| Encryption-at-Rest | True | |
+| Encryption Key | Default | |
+| Encryption in transit | True | |
+| Access Control Option | No Access | |
+</details>
+<details>
+  <summary><b> Engine and Location  </b></summary>
+
+![ElastiCache: Engine and Location](assets/aws/ecache_create_1.png)
+</details>
+<details>
+  <summary><b> Redis Settings  </b></summary>
+
+![ElastiCache:  Redis Settings](assets/aws/ecache_create_2.png)
+
+</details>
+<details>
+  <summary><b> Advanced Redis Settings </b></summary>
+
+![ElastiCache: Advanced Redis Settings](assets/aws/ecache_create_3.png)
+
+</details>
+<details>
+  <summary><b> Security  </b></summary>
+
+![ElastiCache: Security](assets/aws/ecache_create_4.png)
+</details>
+
+
+#### adding endpoint to parameterstore
+Go to `Parameter Store` under `AWS Systems Manager` and add `ELASTICACHE_ENDPOINT` without port `:6379` to parameter store.
+
+
+
+| Setting | Option | 
+| --| --| --|
+| Name | xkcdapp/test/ELASTICACHE_ENDPOINT | 
+| Description | xkcd app ElastiCache Redis Endpoint | 
+| Tier | Standard |
+| Type | SecureString |
+| KMS key source | My Current Account |
+| KMS Key ID | alias/aws/ssm |
+| Value | xkcdappredis.xxxxx.yyyy.rrrr.cache.amazonaws.com  | 
+
+
+
+#### installing [django-redis](https://github.com/jazzband/django-redis) package
+```bash
+# be sure to be in venv virtuall environment
+pip install django-redis
+```
+#### updating Django settings to use Redis as Session Storage
+
+```python
+# xkcd_app/xkcd_app/settings.py
+# ELASTICACHE_ENDPOINT without the port 
+ELASTICACHE_ENDPOINT = ssm.get_parameter(Name=prefixenv + "ELASTICACHE_ENDPOINT", WithDecryption=True)['Parameter']['Value']
+CACHE_LOCATION =  f"redis://{ELASTICACHE_ENDPOINT}/0"
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": CACHE_LOCATION,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+#Use the redis as Session storage as well.
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+```
+
+### Elastic Container Registry
+Go to `Repositories` under `Elastic Container Registry` and click on the Create Repository button. Give your ECR repository a name and click create.
+
+![Elastic Container Registry Creation](assets/aws/ecr_create_1.png)
+
+#### uploading XKCD Apps Docker Image to ECR
+Go to detail page of your repository and click on the `View Push Commands` on the upper right. This will give you `login`, `build`, `tag` and `push` commands specific to your repository.
+
+```bash
+# get credentials to ECR Repo
+aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 12345678912.dkr.ecr.eu-west-2.amazonaws.com
+
+#build your image
+docker build -t xckdapp .
+
+# tag it as the latest
+docker tag xckdapp:latest 12345678912.dkr.ecr.eu-west-2.amazonaws.com/xckdapp:latest
+
+# push to ECR
+docker push 12345678912.dkr.ecr.eu-west-2.amazonaws.com/xckdapp:latest
+
+```
 ### Elastic Container Service
 #### ExecutionRole, Security Group
+
+Go to `Role` under `IAM` and click on create Role button. Attach policies below:
+1. AmazonECSTaskExecutionRolePolicy (aws managed)
+2. SystemManagerParameterStoreFullAccess (custom)
+
+![ECS Task Role Creation](assets/aws/ecs_task_role_create.png)
+
+#### create security group
+
+![](assets/aws/ecs_security_group.png)
+| Setting | Option |
+|-- |-- |
+| Name | XKCDAppECSSecurityGroup |
+| Description | XKCD Apps security group, allows container ports |
+| VPC | Select your VPC, or use the default one. |
+| Inbound Rules | Type: `CustomTCP`, Port Range: `80`, Source: `Anywhere` |
+| Inbound Rules | Type: `CustomTCP`, Port Range: `8000`, Source: `Anywhere` |
+| Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
+
+
+#### create a task definition
+Go to `Task Definitions` under `Elastic Container Service` and create task definition.
+
+![](assets/aws/ecs_task_def_1.png)
+![](assets/aws/ecs_task_def_2.png)
+![](assets/aws/ecs_task_def_container.png)
+
+
+#### create cluster service
+Go to default cluster
+![](assets/aws/ecs_service_create.png)
+![](assets/aws/ecs_service_security_group.png)
+
+
+
 #### creating fargate flee
 
 ### Elastic Load Balancing
@@ -428,7 +731,7 @@ We will be attaching this IAM Role to ECS containers we are going to run. So the
 #### creation
 
 ### Route53
-
+### updating security groups
 --------
 - parameter store + parameterstore Role (seanjziegler)
 - database to aws rds, sec group open
