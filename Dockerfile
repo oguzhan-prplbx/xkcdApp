@@ -3,7 +3,7 @@ FROM python:3.8
 ENV PYTHONUNBUFFERED=1
 
 # changing our working directory to be /opt
-WORKDIR /opt
+WORKDIR /usr/src/
 
 # copying and installing python requirements
 COPY requirements.txt requirements.txt
