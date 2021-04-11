@@ -26,34 +26,80 @@ In this blog post,
 
 ### Index
 
+**Coding the XKCD Django App**
+1. Creating and activating a virtual environment
+2. Installing Django
+3. Creating database models
+4. Adding models to django admin page
+5. Creating the homepage view
+6. Adding homepage view to urls
+7. Creating homepage.html
+8. Creating requirements.txt file
+9. Dockerizing our Django App
+  9.1 testing the Docker Image
 
-**Writing XKCD Django App**
-1. creating virtualenvironment
-1. installing django
-2. creating & migrating our models 
-3. adding homepage view
-4. configuring urls
-5. writing the HTML
-6. Dockerizing our application
-7. serving django with gunicorn on docker
+**Configuring AWS**
+1. AWS RDS - Relational Database Service
+ 1.1 Configuring RDS Security Group
+ 1.2 Creating a Postgresql Database on RDS 
+ 1.3 Updating Django settings to use the PostgreSQL Database Backend
+  1.3.1 Install the PostgreSQL library
+  1.3.2 Update the settings.py
+2. AWS Systems Manager Parameter Store
+ 2.1 Adding our secrets to Parameter Store
+ 2.2 Configuring Django App to use AWS Parameter Store
+  2.2.1 Install AWS SDK for Python: boto3
+  2.2.2 Update the settings.py file
+ 2.3 Migrating Django models to RDS instance
+ 2.4 Build & run the docker image with the aws credentials
+ 2.5 Creating Parameter Store IAM Role
+ 2.6 Creating a super user
+3. ElastiCache Redis
+ 3.1 Creating the Security Group: XKCDAppElastiCacheSecurityGroup
+ 3.2 Creating the ElastiCache Redis Instance
+ 3.3 Adding ElastiCache endpoint to Parameter Store
+ 3.4 Installing [django-redis](https://github.com/jazzband/django-redis) package
+ 3.5 Updating Django settings to use Redis as Session Storage
+4. Elastic Container Registry
+ 4.1 Uploading XKCD Apps Docker Image to ECR
+5. Elastic Load Balancing
+ 5.1 ELB Security Group Creation
+ 5.2 ELB Creation
+  5.2.1 - Step 1: Configure Load Balancer
+  5.2.2 - Step 2: Security Settings
+  5.2.3 - Step 3: Security Groups
+  5.2.4 - Step 4: Routing: Target Group Creation
+  5.2.5 - Step 5: Registering Targets to Target Group
+  5.2.6 - Step 6: Review
+  5.2.7 -  Step 7: Forward traffic from port 80 to port 8000
+6. Elastic Container Service
+ 6.1 Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
+ 6.2 Creating ECS security group: XKCDAppECSSecurityGroup
+ 6.3 Creating Task Definition: XKCDAppTaskDefinition
+  6.3.1 Adding a container to XKCDAppTaskDefinition
+ 6.4 Creating Cluster Service
+  6.4.1 - Step 1: Configure Service 
+  6.4.2 - Step 2: Configure Network 
+  6.4.3 - Step 3: Set Auto Scaling
+  6.4.4 - Step 4: Review
+ 6.5 Load Testing our App with Hey
+ 6.6 Creating auto scaling for XKCDAppClusterService
+  6.6.1 Testing the Auto Scaling Policy
+7. Updating security groups
 
-**AWS**
-2. AWS Relational Database Service
-1. AWS System Managers Parameter Store
-3. Moving our app secrets to Parameter Store
-4. uploading our docker image to ECR
-5. creating an ELB (ECS will only accept requests from ELB's security group.)
-6. deploying to ECS Fargate + hey benchmark
-7. 
 
-### AWS Security Groups & IAM Roles
-On this post, whenever we are going to create an AWS Service we will be creating that service's Security Group or IAM Role beforehand.
+### About AWS Security Groups & IAM Roles
+On this blog post, whenever we are going to create an AWS Service we will be creating that service's Security Group or IAM Role beforehand.
 
 All security groups will have fully open inbound/outbound rules at first, and when we are done with the application setup on AWS, we will go and revise the inbound/outbound rules of all security groups. 
 
 ## Coding the XKCD Django App
 
-### Creating and activating virtual environment
+For this blog's demo, we can create a very small XKCD Comic Viewer Django application. It's going to only have a homepage view that will show a random comic using python module xkcd, and will have a button for another comic.
+
+It will also update the view count of a XKCD comic in a database model with comic's id.
+
+### 1. Creating and activating a virtual environment
 ```bash
 # install the virtualenv package
 pip install virtualenv
@@ -69,7 +115,7 @@ activate
 ./venv/bin/activate
 ```
 
-### Installing Django
+### 2. Installing Django
 
 ```bash
 # install django and xkcd python library
@@ -107,7 +153,7 @@ INSTALLED_APPS = [
 ]
 ```
 
-#### creating database models
+### 3. Creating database models
 Let's create our models. First we have to create a file named `models.py` on our `xkcd_app` folder.
 
 ```python
@@ -131,7 +177,7 @@ python manage.py makemigrations xkcd_app
 python manage.py migrate xkcd_app
 ```
 
-#### adding models to django admin page
+### 4. Adding models to django admin page
 
 create a `admin.py` file under `xkcd_app/xkcd_app`
 
@@ -143,7 +189,7 @@ from .models import XKCDComicViews
 admin.site.register(XKCDComicViews)
 ```
 
-#### creating homepage view
+### 5. Creating the homepage view
 Let's create `views.py` under our xkcd_app.
 
 ```python
@@ -174,7 +220,7 @@ def homepage(request):
     return render(request, 'xkcd_app/homepage.html', context)
 
 ```
-#### adding homepage view to urls.py
+### 6. Adding homepage view to urls
 ```python
 # /xkcd_app/xkcd_app/urls.py
 from django.contrib import admin
@@ -185,7 +231,7 @@ urlpatterns = [
     path('', homepage, name='homepage')
 ]
 ```
-#### creating homepage.html
+### 7. Creating homepage.html
 
 ```html
 <!-- /xkcd_app/xkcd_app/templates/xkcd_app/homepage.html -->
@@ -215,9 +261,9 @@ urlpatterns = [
 </html>
 ```
 
-#### creating requirements.txt file
+### 8. Creating requirements.txt file
 
-Freeze the python requirements and move the file to root directory of the project. 
+Freeze the python requirements and move the file to root directory of the project. You are expected to regularly update your requirements.txt file.
 
 ```bash
 # cd into the root directory of the project and then run the command below 
@@ -235,7 +281,7 @@ gunicorn
 django-redis
 ```
 
-### Dockerizing our Django App
+### 9. Dockerizing our Django App
 
 Create a `Dockerfile` on the root directory of the project.
 
@@ -244,25 +290,27 @@ Create a `Dockerfile` on the root directory of the project.
 FROM python:3.8
 # PYTHONUNBUFFERED variable is used for non-buffered stdout
 ENV PYTHONUNBUFFERED=1
+# update the packages
+RUN apt update -y && apt upgrade -y 
 
-# changing our working directory to be /opt
-WORKDIR /opt
+# changing our working directory to be /usr/src
+WORKDIR /usr/src/
 
 # copying and installing python requirements
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
-# copying the entire django application
+# copying the whole django application
 COPY xkcd_app/ .
 
 # exposing our django port: 8000
 EXPOSE 8000
 
-# serving django with gunicorn on port 8000 (1 worker, timeout of 15 secs)
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "15", "xkcd_app.wsgi"]
+# serving django with gunicorn on port 8000 (1 worker, timeout of 60 secs)
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "60", "xkcd_app.wsgi"]
 ```
 
-#### testing the Docker Image
+#### 9.1 testing the Docker Image
 
 Let's build and run our docker image.
 
@@ -281,12 +329,12 @@ docker run -p 8000:8000 xkcd:latest
 ```
 If everything goes well, you can go to [http://0.0.0.0:8000](http://0.0.0.0:8000) or [http://localhost:8000](http://localhost:8000) to see XKCD app working.
 
+----------
 
+## Configuring AWS
 
-## AWS
-
-### AWS RDS - Relational Database Service
-#### configuring RDS Security Group
+### 1. AWS RDS - Relational Database Service
+#### 1.1 Configuring RDS Security Group
 On AWS Console, go to `Security Groups` under the `VPC` service. Press Create Security Group button.
 
 ![RDS Security Group Creation](assets/aws/rds_sg_creation.png)
@@ -299,7 +347,7 @@ On AWS Console, go to `Security Groups` under the `VPC` service. Press Create Se
 | Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
 
 
-#### creating a Postgresql Database on RDS 
+#### 1.2 Creating a Postgresql Database on RDS 
 On AWS Console, go to `RDS` and start to create a new RDS instance. RDS creation settings below uses default VPC and Free-tier. Feel free to change the configuration according to your requirements.
 <details open>
   <summary> <b> Table of Configuration </b></summary>
@@ -394,16 +442,16 @@ Wait for the database creation to be complete. Go to `xkcdappdb` on `RDS > Datab
 
 </details>
 
-#### updating django settings to use the PostgreSQL Database Backend
+#### 1.3 Updating Django settings to use the PostgreSQL Database Backend
 
-##### install the PostgreSQL library
+##### 1.3.1 Install the PostgreSQL library
 ```bash
 # be sure to activate the venv environment
 pip install psycopg2-binary
 ```
 
 
-##### update the settings.py
+##### 1.3.2 Update the settings.py
 ```python
 #/xkcd_app/xkcd_app/settings.py
 import os
@@ -423,12 +471,12 @@ DATABASES = {
 
 Using environment variables for application configuration **is not a secure way** of doing things. Integrating AWS Parameter Store to our `settings.py` file is something easy. Let's configure AWS Systems Manager Parameter Store for XKCD App.
 
-### Parameter Store
+### 2. AWS Systems Manager Parameter Store
 
 Go to `Parameter Store` under `AWS Systems Manager` and click on **Create Parameter**.
 
 Parameter Store lets you create categorized paramater names, so you can have different parameters for different apps or app environments.
-#### adding our secrets to parameter store
+#### 2.1 Adding our secrets to Parameter Store
 For **DATABASE_NAME** parameter, you can create a parameter as following:
 
 ![AWS Parameter Store adding DATABASE_NAME as a parameter](assets/aws/aws_parameter_store_add.png)
@@ -453,14 +501,14 @@ You can check the existence of parameters with AWS CLI, if you have it set up.
 aws ssm get-parameters --name "/xkcdapp/test/DATABASE_HOST" --with-decryption --region <your_region> --profile <your_aws_cli_profile>
 ```
 
-#### configuring Django App to use AWS Parameter Store
+#### 2.2 Configuring Django App to use AWS Parameter Store
 
-##### install AWS SDK for Python: boto3
+##### 2.2.1 Install AWS SDK for Python: boto3
 ```bash
 # be sure to be in the venv virtual environment
 pip install boto3
 ```
-##### update the settings.py file
+##### 2.2.2 Update the settings.py file
 
 ```python
 # xkcd_app/xkcd_app/settings.py
@@ -485,7 +533,7 @@ DATABASES = {
 }
 ```
 
-#### migrating django models to RDS instance
+#### 2.3 Migrating Django models to RDS instance
 
 > **_NOTE:_** : Be sure that your AWS Accounts credentials are set in the AWS CLI's `credentials` file.
 
@@ -505,7 +553,7 @@ python manage.py migrate
 ```
 
 
-##### build & run the docker image with the aws credentials
+#### 2.4 Build & run the docker image with the aws credentials
 If you want to build and test the docker image with the application secrets on the AWS Parameter Store:
 1. build the image again to apply the `settings.py` file changes to docker image.
 2. run the image with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` environment variables set. 
@@ -520,7 +568,7 @@ docker run -p 8000:8000 -e AWS_ACCESS_KEY_ID='XXXXXXXXXXXX' -e AWS_SECRET_ACCESS
 We won't need to send the AWS Credentials to our Docker image when we deploy on the Elastic Container Service, as the AWS automatically sets those environment variables upon instance creation.
 
 
-#### creating parameter store IAM Role
+#### 2.5 Creating Parameter Store IAM Role
 Go to `Roles` under `AWS IAM` and  click on **Create Role**.
 
 Select the _System Manager_ use case.
@@ -568,15 +616,18 @@ Give a name and description to Parameter Store access role.
 We will be attaching this IAM Role to ECS containers we are going to run to allow them to read the parameters.
 
 
-##### creating a super user
+#### 2.6 Creating a super user
+
+When you are connected to your RDS instance, you can create an admin user with the following command. 
+
 ```bash
 python3 manage.py createsuperuser
 ```
 
 
-### ElastiCache Redis
+### 3. ElastiCache Redis
 
-#### Creating the Security Group: XKCDAppElastiCacheSecurityGroup
+#### 3.1 Creating the Security Group: XKCDAppElastiCacheSecurityGroup
 
 ![Elasti Cache Redis Security Group Creation](assets/aws/elasticache_sg.png)
 
@@ -588,7 +639,7 @@ python3 manage.py createsuperuser
 | Inbound Rules | Type: `CustomTCP`, Port Range: `6379`, Source: `Anywhere` |
 | Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
 
-#### Creating the ElastiCache Redis Instance
+#### 3.2 Creating the ElastiCache Redis Instance
 Go to `Redis` under `ElastiCache` and press create button.
 
 
@@ -643,7 +694,7 @@ Go to `Redis` under `ElastiCache` and press create button.
 </details>
 
 
-#### adding endpoint to parameterstore
+#### 3.3 Adding ElastiCache endpoint to Parameter Store
 Go to `Parameter Store` under `AWS Systems Manager` and add `ELASTICACHE_ENDPOINT` **without port** `:6379` to parameter store.
 
 
@@ -660,12 +711,12 @@ Go to `Parameter Store` under `AWS Systems Manager` and add `ELASTICACHE_ENDPOIN
 
 
 
-#### installing [django-redis](https://github.com/jazzband/django-redis) package
+#### 3.4 Installing [django-redis](https://github.com/jazzband/django-redis) package
 ```bash
 # be sure to be in venv virtuall environment
 pip install django-redis
 ```
-#### updating Django settings to use Redis as Session Storage
+#### 3.5 Updating Django settings to use Redis as Session Storage
 
 ```python
 # xkcd_app/xkcd_app/settings.py
@@ -686,12 +737,12 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
 ```
 
-### Elastic Container Registry
+### 4. Elastic Container Registry
 Go to `Repositories` under `Elastic Container Registry` and click on the Create Repository button. Give your ECR repository a name and click create.
 
 ![Elastic Container Registry Creation](assets/aws/ecr_create_1.png)
 
-#### uploading XKCD Apps Docker Image to ECR
+#### 4.1 Uploading XKCD Apps Docker Image to ECR
 Go to detail page of your repository and click on the `View Push Commands` on the upper right. This will give you `login`, `build`, `tag` and `push` commands specific to your repository.
 
 ```bash
@@ -709,10 +760,10 @@ docker push 12345678912.dkr.ecr.eu-west-2.amazonaws.com/xckdapp:latest
 
 ```
 
-### Elastic Load Balancing
+### 5. Elastic Load Balancing
 We are going to access to our Elastic Container Service container instances through a AWS Elastic Load Balancer. We are going to create the ELB first in order to add it to Elastic Container Service upon creation.
 
-#### ELB Security Group Creation
+#### 5.1 ELB Security Group Creation
 Go to `Security Groups` under `VPC` and create one.
 
 ![ELB Security Group Creation](assets/aws/elb_sec_group_create.png)
@@ -729,11 +780,11 @@ Go to `Security Groups` under `VPC` and create one.
 | Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
 
 
-#### ELB Creation
+#### 5.2 ELB Creation
 
 Go to `Load Balancers` under `EC2` and click on Create Load Balancer button and select `Application Load Balancer`.
 
-##### Step 1: Configure Load Balancer
+##### 5.2.1 - Step 1: Configure Load Balancer
 ![ELB Creation: Configuring load balancer](assets/aws/elb_create_1.png)
 
 
@@ -751,16 +802,16 @@ For Availability Zones, you should remember you AZ choices, as you will need to 
 | Listeners | HTTP: 8000 |
 | Availability Zones | 2a, 2b, 2c |
 
-##### Step 2: Security Settings
+##### 5.2.2 - Step 2: Security Settings
 ![ELB Creation: Target Group creation](assets/aws/elb_create_3.png)
 
 We are not going to use HTTPS for this demo, feel free to skip this step.
 
-##### Step 3: Security Groups
+##### 5.2.3 - Step 3: Security Groups
 
 ![ELB Creation: Target Group creation](assets/aws/elb_create_4.png)
 
-##### Step 4: Routing: Target Group Creation
+##### 5.2.4 - Step 4: Routing: Target Group Creation
 
 ![ELB Creation: Target Group creation](assets/aws/elb_create_5.png)
 
@@ -775,11 +826,11 @@ We are not going to use HTTPS for this demo, feel free to skip this step.
 | Health Checks: Protocol | HTTP  |
 | Health Checks: Path | / |
 
-##### Step 5: Registering Targets to Target Group
+##### 5.2.5 - Step 5: Registering Targets to Target Group
 
 Feel free to skip this step, ECS will going to manage target groups.
 
-##### Step 6: Review
+##### 5.2.6 - Step 6: Review
 Click on create button. And when you go back to Load Balancers console, you should see something like this. 
 
 | Name| DNS name | state |
@@ -788,7 +839,7 @@ Click on create button. And when you go back to Load Balancers console, you shou
 
 We will be using the DNS name to connect to our ECS instances, take a note of it.
 
-##### Step 7: Forward traffic from port 80 to port 8000
+##### 5.2.7 -  Step 7: Forward traffic from port 80 to port 8000
 
 Go to `Listeners` tab on XKCDAppELB's detail view under `Load balancers`. On listener `HTTP: 80` click on `view/edit rules`.
 
@@ -806,8 +857,8 @@ Add a rule to forward HTTP:80 traffic to HTTP:8000.
 ![ELB Port Forwarding: Adding a rule Group creation](assets/aws/elb_port_fwd_2.png)
 
  
-### Elastic Container Service
-#### Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
+### 6. Elastic Container Service
+#### 6.1 Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
 
 Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 1. AmazonECSTaskExecutionRolePolicy (aws managed)
@@ -815,7 +866,7 @@ Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 
 ![ECS Task Role Creation](assets/aws/ecs_task_role_create.png)
 
-#### Creating ECS security group: XKCDAppECSSecurityGroup
+#### 6.2 Creating ECS security group: XKCDAppECSSecurityGroup
 
 ![Creating ECS security group: XKCDAppECSSecurityGroup](assets/aws/ecs_security_group.png)
 
@@ -829,7 +880,7 @@ Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 | Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
 
 
-#### Creating Task Definition: XKCDAppTaskDefinition
+#### 6.3 Creating Task Definition: XKCDAppTaskDefinition
 Go to `Task Definitions` under `Elastic Container Service` and create task definition.
 
 ![](assets/aws/ecs_task_def_1.png)
@@ -845,7 +896,7 @@ Go to `Task Definitions` under `Elastic Container Service` and create task defin
 | Task Memory | 2 GiB |
 | Task CPU | 1vCPU  |
 
-##### Adding a container to XKCDAppTaskDefinition
+##### 6.3.1 Adding a container to XKCDAppTaskDefinition
 
 Click on `Add container` button under the section `Container Definitions`
 
@@ -860,13 +911,13 @@ Remember to append `:latest` tag to your Elastic Container Registry URI.
 |  Port Mappings | 80 TCP  |
 
 
-#### Creating Cluster Service
+#### 6.4 Creating Cluster Service
 Click on the default cluster on `Clusters` page under `Elastic Container Service`.
 
 ![AWS ECS default cluster](assets/aws/ecs_default_cluster_create_service.png)
 
 Click on `Create` button under `Services`.
-##### Step 1: Configure Service 
+##### 6.4.1 - Step 1: Configure Service 
 ![Creating AWS ECS Cluster Service ](assets/aws/ecs_service_create.png)
 | Setting | Option |
 | -- | -- |
@@ -881,7 +932,7 @@ Click on `Create` button under `Services`.
 | Min healty percent |100 |
 | Max percent |200 |
 
-##### Step 2: Configure Network 
+##### 6.4.2 - Step 2: Configure Network 
 
 **VPC & Security Group**
 ![Selecting AWS ECS Cluster Service Security Group](assets/aws/ecs_service_security_group.png)
@@ -917,10 +968,10 @@ Click on `Create` button under `Services`.
 | Health check path| / |
 
 
-##### Step 3: Set Auto Scaling
+##### 6.4.3 - Step 3: Set Auto Scaling
 We will configure auto scaling later. Skip this step for now. 
 
-##### Step 4: Review
+##### 6.4.4 - Step 4: Review
 Make sure your changes are correct and click on `Create Service` button.
 
 Go to `Tasks` tab under `Service: XKCDAppClusterService`, and wait for your task's status to be `RUNNING`.
@@ -930,7 +981,7 @@ Now you can go to your Elastic Load Balancer's DNS name which is something like 
 If you haven't done the ELB port forwarding remember to append the port `:8000` to DNS name.
 
 
-#### Load Testing our App with Hey
+#### 6.5 Load Testing our App with Hey
 
 [Hey](https://github.com/rakyll/hey) is an open-sourced load testing tool. We will be using it to test how well a single container of XKCD App does under load. And with the information we get out of load-testing, we can decide on a good Auto Scaling Policy.
 
@@ -987,14 +1038,14 @@ In almost a minute, our application responded to 100 requests and it responded i
 
 That's the ideal situation for XKCD App, so we will configure Auto Scaling condition to be 100 requests per minute per instance.
 
-#### creating auto scaling for XKCDAppClusterService
+#### 6.6 Creating auto scaling for XKCDAppClusterService
 Go to `XKCDAppClusterService` under default cluster and click update.
 ![Configuring AWS ECS Auto Scaling](assets/aws/ecs_auto_scaling.png)
 
 Set up a reasonable Auto Scaling Policy.
 ![Configuring AWS ECS Auto Scaling Policy](assets/aws/ecs_auto_scaling_policy.png)
 
-##### testing the Auto Scaling Policy
+##### 6.6.1 Testing the Auto Scaling Policy
 Normally, XKCDAppClusterService's desired count of instances is 1.
 ![Configuring AWS ECS Auto Scaling: POC before](assets/aws/ecs_auto_scaling_poc_before.png)
 
@@ -1008,7 +1059,7 @@ I could see that my instance count is increased after cool-down time.
 
 
 
-### updating security groups
+### 7. Updating security groups
 Our XKCD App runs on the security group configuration of below diagram.
 ![](assets/aws/aws_security_groups_diagram.png)
 
@@ -1023,7 +1074,7 @@ If we follow the access through the security groups, we can come up with a inbou
 
 Let's update our security groups. Go to `Security Groups` under `VPC`.
 
-#### XKCDAppElasticLoadBalancerSecurityGroup
+#### 7.1 XKCDAppElasticLoadBalancerSecurityGroup
 
 Select `XKCDAppElasticLoadBalancerSecurityGroup` and edit the rules.
 
@@ -1033,7 +1084,7 @@ Select `XKCDAppElasticLoadBalancerSecurityGroup` and edit the rules.
 | Inbound | Custom TCP: 8000 |Custom | Anywhere | 
 | Outbound | All Traffic  | Custom | XKCDAppECSSecurityGroup | 
 
-#### XKCDAppECSSecurityGroup
+#### 7.2 XKCDAppECSSecurityGroup
 
 Select `XKCDAppECSSecurityGroup` and edit the rules.
 
@@ -1045,7 +1096,7 @@ Select `XKCDAppECSSecurityGroup` and edit the rules.
 | Outbound | Custom TCP: 6379  | Custom | XKCDAppElastiCacheSecurityGroup | 
 | Outbound | Custom TCP: 5432  | Custom | XKCDAppRDSSecurityGroup | 
 
-#### XKCDAppElastiCacheSecurityGroup
+#### 7.3 XKCDAppElastiCacheSecurityGroup
 
 Select `XKCDAppElastiCacheSecurityGroup` and edit the rules.
 
@@ -1054,7 +1105,7 @@ Select `XKCDAppElastiCacheSecurityGroup` and edit the rules.
 | Inbound | TCP: 6379| Custom | XKCDAppECSSecurityGroup | 
 
 
-#### XKCDAppRDSSecurityGroup
+#### 7.4 XKCDAppRDSSecurityGroup
 
 Select `XKCDAppRDSSecurityGroup` and edit the rules.
 
