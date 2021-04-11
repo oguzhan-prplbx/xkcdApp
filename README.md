@@ -40,51 +40,51 @@ In this blog post,
 
 **Configuring AWS**
 1. AWS RDS - Relational Database Service
-   1.1 Configuring RDS Security Group
-   1.2 Creating a Postgresql Database on RDS 
-   1.3 Updating Django settings to use the PostgreSQL Database Backend
-      1.3.1 Install the PostgreSQL library
-      1.3.2 Update the settings.py
+   1.1. Configuring RDS Security Group
+   1.2. Creating a Postgresql Database on RDS 
+   1.3. Updating Django settings to use the PostgreSQL Database Backend
+      1.3.1. Install the PostgreSQL library
+      1.3.2. Update the settings.py
 2. AWS Systems Manager Parameter Store
-   2.1 Adding our secrets to Parameter Store
-   2.2 Configuring Django App to use AWS Parameter Store
-      2.2.1 Install AWS SDK for Python: boto3
-      2.2.2 Update the settings.py file
-   2.3 Migrating Django models to RDS instance
-   2.4 Build & run the docker image with the aws credentials
-   2.5 Creating Parameter Store IAM Role
-   2.6 Creating a super user
+   2.1. Adding our secrets to Parameter Store
+   2.2. Configuring Django App to use AWS Parameter Store
+      2.2.1. Install AWS SDK for Python: boto3
+      2.2.2. Update the settings.py file
+   2.3. Migrating Django models to RDS instance
+   2.4. Build & run the docker image with the aws credentials
+   2.5. Creating Parameter Store IAM Role
+   2.6. Creating a super user
 3. ElastiCache Redis
-   3.1 Creating the Security Group: XKCDAppElastiCacheSecurityGroup
-   3.2 Creating the ElastiCache Redis Instance
-   3.3 Adding ElastiCache endpoint to Parameter Store
-   3.4 Installing [django-redis](https://github.com/jazzband/django-redis) package
-   3.5 Updating Django settings to use Redis as Session Storage
+   3.1. Creating the Security Group: XKCDAppElastiCacheSecurityGroup
+   3.2. Creating the ElastiCache Redis Instance
+   3.3. Adding ElastiCache endpoint to Parameter Store
+   3.4. Installing [django-redis](https://github.com/jazzband/django-redis) package
+   3.5. Updating Django settings to use Redis as Session Storage
 4. Elastic Container Registry
-   4.1 Uploading XKCD Apps Docker Image to ECR
+   4.1. Uploading XKCD Apps Docker Image to ECR
 5. Elastic Load Balancing
-   5.1 ELB Security Group Creation
-   5.2 ELB Creation
-      5.2.1 - Step 1: Configure Load Balancer
-      5.2.2 - Step 2: Security Settings
-      5.2.3 - Step 3: Security Groups
-      5.2.4 - Step 4: Routing: Target Group Creation
-      5.2.5 - Step 5: Registering Targets to Target Group
-      5.2.6 - Step 6: Review
-      5.2.7 - Step 7: Forward traffic from port 80 to port 8000
+   5.1. ELB Security Group Creation
+   5.2. ELB Creation
+      5.2.1. - Step 1: Configure Load Balancer
+      5.2.2. - Step 2: Security Settings
+      5.2.3. - Step 3: Security Groups
+      5.2.4. - Step 4: Routing: Target Group Creation
+      5.2.5. - Step 5: Registering Targets to Target Group
+      5.2.6. - Step 6: Review
+      5.2.7. - Step 7: Forward traffic from port 80 to port 8000
 6. Elastic Container Service
-   6.1 Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
-   6.2 Creating ECS security group: XKCDAppECSSecurityGroup
-   6.3 Creating Task Definition: XKCDAppTaskDefinition
+   6.1. Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
+   6.2. Creating ECS security group: XKCDAppECSSecurityGroup
+   6.3. Creating Task Definition: XKCDAppTaskDefinition
       6.3.1 Adding a container to XKCDAppTaskDefinition
    6.4 Creating Cluster Service
-      6.4.1 - Step 1: Configure Service 
-      6.4.2 - Step 2: Configure Network 
-      6.4.3 - Step 3: Set Auto Scaling
-      6.4.4 - Step 4: Review
-   6.5 Load Testing our App with Hey
-   6.6 Creating auto scaling for XKCDAppClusterService
-      6.6.1 Testing the Auto Scaling Policy
+      6.4.1. - Step 1: Configure Service 
+      6.4.2. - Step 2: Configure Network 
+      6.4.3. - Step 3: Set Auto Scaling
+      6.4.4. - Step 4: Review
+   6.5. Load Testing our App with Hey
+   6.6. Creating auto scaling for XKCDAppClusterService
+      6.6.1. Testing the Auto Scaling Policy
 7. Updating security groups
 
 
