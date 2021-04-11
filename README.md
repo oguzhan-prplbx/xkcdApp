@@ -988,7 +988,10 @@ In almost a minute, our application responded to 100 requests and it responded i
 That's the ideal situation for XKCD App, so we will configure Auto Scaling condition to be 100 requests per minute per instance.
 
 #### creating auto scaling for XKCDAppClusterService
+Go to `XKCDAppClusterService` under default cluster and click update.
 ![Configuring AWS ECS Auto Scaling](assets/aws/ecs_auto_scaling.png)
+
+Set up a reasonable Auto Scaling Policy.
 ![Configuring AWS ECS Auto Scaling Policy](assets/aws/ecs_auto_scaling_policy.png)
 
 ##### testing the Auto Scaling Policy
