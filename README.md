@@ -2,7 +2,7 @@
 
 
 ## Overview
-In this blog post, we will create a small Django application and dockerize it. Then we will be using the docker image to deploy the appliction to AWS Elastic Conatiner Service with Auto Scaling. 
+In this blog post, we will create a small Django application and dockerize it. Then we will be using the docker image to deploy the appliction to AWS Elastic Container Service with Auto Scaling. 
 
 Django's sessions will be stored on a AWS ElastiCache Redis server to avoid hitting the database too much. We will also be using AWS Systems Manager Parameter Store to store our application secrets such as database credentials.
 
@@ -67,7 +67,7 @@ Django's sessions will be stored on a AWS ElastiCache Redis server to avoid hitt
    1. Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
    2. Creating ECS security group: XKCDAppECSSecurityGroup
    3. Creating Task Definition: XKCDAppTaskDefinition
-      1 Adding a container to XKCDAppTaskDefinition
+      1. Adding a container to XKCDAppTaskDefinition
    4. Creating Cluster Service
       1. Step 1: Configure Service 
       2. Step 2: Configure Network 
