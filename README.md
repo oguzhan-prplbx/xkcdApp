@@ -1,21 +1,29 @@
-# Ultimate Guide to Deploying Django at Scale on AWS Elastic Container Service
+# Ultimate Guide to Securely Deploying Django at Scale on AWS Elastic Container Service
 
 
 ## Overview
 
 
 ### problems:
-session
-database
-logs
+1. **Session**: When you want to scale a monolithic framework such as Django, you probably want to avoid hitting your database too much. Django defaults to [database as the session storage](https://docs.djangoproject.com/en/dev/topics/http/sessions/#configuring-sessions), but in this post we will be creating a AWS ElastiCache Redis instance to write/read our sessions.
+2. **Static Files**: XKCD App will not require  
+
+3. **Logs**:As this post is going to create many instances to serve the application, we
 
 
 ### Pre requisites
 
-we are going to use [xkcd library](https://pypi.org/project/xkcd/#description)
+- Some Django knowledge
+- Minimal Docker knowledge
+- Free-tier AWS Account
+- AWS CLI installed & AWS Credentials set up
 
-Writing XKCD Django App
-0. creating virtualenvironment
+
+### Index
+
+
+**Writing XKCD Django App**
+1. creating virtualenvironment
 1. installing django
 2. creating & migrating our models 
 3. adding homepage view
@@ -23,17 +31,20 @@ Writing XKCD Django App
 5. writing the HTML
 6. Dockerizing our application
 7. serving django with gunicorn on docker
-AWS
+
+**AWS**
 1. creating parameter store
 2. RDS security group & RDS Creation
 3. Moving our app secrets to Parameter Store
 4. uploading our docker image to ECR
-5. deploying to ECS Fargate + hey benchmark
-6. creating an ELB (ECS will only accept requests from ELB's security group.)
-7. enabling HTTPS with ACM
-8. Route53 configuration
+5. creating an ELB (ECS will only accept requests from ELB's security group.)
+6. deploying to ECS Fargate + hey benchmark
+7. 
 
-## Implementing XKCD App
+### AWS Security Groups & IAM Roles
+On this post, whenever we create an AWS Service we will be creating it's Security Group or IAM Role beforehand. 
+
+## Coding the XKCD Django App
 
 ### Creating and activating virtual environment
 ```bash
@@ -358,7 +369,7 @@ Be sure to select Public Access: Yes. We will need to access the database public
 
 </br>
 
-> **_NOTE:_**  **Initial Database Name** field has to be filled or the AWS will not create a database inside the RDS instance you are creating. If you fail to fill this field, you will have to manually create the database.
+> **_NOTE:_**  **Additional Configuration: Initial Database Name** field has to be filled or the AWS will not create a database inside the RDS instance you are creating. If you fail to fill this field, you will have to manually create the database.
 
 
 ![Additional Configuration](assets/aws/rds_9.png)
@@ -421,7 +432,7 @@ For **DATABASE_NAME** parameter, you can create a parameter as following:
 | KMS Key ID | alias/aws/ssm | Choose the default AWS managed key. This will allow ECS containers to access to parameters without further configuration. |
 | Value | xkcddb_test_db  | Type the database name you gave in the RDS Creation: Additional Configuration step. |
 
-Follow the same steps to add the remaining database connection credentials to paramater store. You may also want to add `SECRET_KEY` variable generated for your Django project. Django's `SECRET_KEY` is used for encryption inside Django. 
+Follow the same steps to add the remaining database connection credentials to paramater store. You may also want to add `SECRET_KEY` variable generated for your Django project. Django's `SECRET_KEY` is used for encryption jobs inside Django. 
 
 When you are finished with adding the secrets, you should see something like this on Parameter Store Console.
 
@@ -485,7 +496,7 @@ python manage.py migrate
 #####
 
 
-##### run the docker image with the aws credentials
+##### build & run the docker image with the aws credentials
 If you want to build and test the docker image with the application secrets on the AWS Parameter Store:
 1. build the image again to apply the `settings.py` file changes to docker image.
 2. run the image with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` environment variables set. 
@@ -497,6 +508,7 @@ docker build -t xkcd:latest .
 docker run -p 8000:8000 -e AWS_ACCESS_KEY_ID='XXXXXXXXXXXX' -e AWS_SECRET_ACCESS_KEY='YYYYYYYYYYY' xkcd:latest
 ```
 
+We won't need to send the AWS Credentials to our Docker image when we deploy on the Elastic Container Service, as the AWS automatically sets those environment variables upon instance creation.
 
 
 #### creating parameter store IAM Role
@@ -574,29 +586,29 @@ Go to `Redis` under `ElastiCache` and press create button.
 <details open>
   <summary><b> Table of Configuration </b></summary>
 
-| Setting | Option | Detail |
-| --| --| --|
-| Cluster Engine | Redis, Cluster Mode Disabled |  |
-| Location | Amazon Cloud | |
-| Name | xkcdappredis | |
-| Description| Session storage for XKCD App | |
-|Engine version compatibility | 6.x | |
-| Port| **6379**| |
-| Parameter group| default.redis6.x| |
-| Node type| **cache.t2.micro (0.5 GiB)** | |
-| Number of replicas| 0 | |
-| Multi-AZ | False | |
-| Subnet Group| Create new| |
-| Subnet Group Name| ecachesubnetgroup | |
-| Subnet Group Description | Subnet group for XKCD apps ElastiCache Redis Storage.| |
-| Subnet Group VPC ID | Default VPC ID | You can choose your own VPC. |
-| Subnet Group Subnets | 2c, 2a, 2b  | Select subnets for your VPC. |
-| Subnet Group AZ Placement | No preference| |
-| Security Group | XKCDAppElastiCacheSecurityGroup | |
-| Encryption-at-Rest | True | |
-| Encryption Key | Default | |
-| Encryption in transit | True | |
-| Access Control Option | No Access | |
+| Setting | Option |
+| --| --|
+| Cluster Engine | Redis, Cluster Mode Disabled | 
+| Location | Amazon Cloud |
+| Name | xkcdappredis |
+| Description| Session storage for XKCD App |
+|Engine version compatibility | 6.x |
+| Port| **6379**|
+| Parameter group| default.redis6.x|
+| Node type| **cache.t2.micro (0.5 GiB)** |
+| Number of replicas| 0 |
+| Multi-AZ | False |
+| Subnet Group| Create new|
+| Subnet Group Name| ecachesubnetgroup |
+| Subnet Group Description | Subnet group for XKCD apps ElastiCache Redis Storage.|
+| Subnet Group VPC ID | Default VPC ID | 
+| Subnet Group Subnets | 2c, 2a, 2b  |
+| Subnet Group AZ Placement | No preference|
+| Security Group | XKCDAppElastiCacheSecurityGroup |
+| Encryption-at-Rest | True |
+| Encryption Key | Default |
+| Encryption in transit | True | 
+| Access Control Option | No Access |
 </details>
 <details>
   <summary><b> Engine and Location  </b></summary>
@@ -623,7 +635,7 @@ Go to `Redis` under `ElastiCache` and press create button.
 
 
 #### adding endpoint to parameterstore
-Go to `Parameter Store` under `AWS Systems Manager` and add `ELASTICACHE_ENDPOINT` without port `:6379` to parameter store.
+Go to `Parameter Store` under `AWS Systems Manager` and add `ELASTICACHE_ENDPOINT` **without port** `:6379` to parameter store.
 
 
 
@@ -687,8 +699,92 @@ docker tag xckdapp:latest 12345678912.dkr.ecr.eu-west-2.amazonaws.com/xckdapp:la
 docker push 12345678912.dkr.ecr.eu-west-2.amazonaws.com/xckdapp:latest
 
 ```
+
+### Elastic Load Balancing
+We are going to access to our Elastic Container Service container instances through a AWS Elastic Load Balancer. We are going to create the ELB first in order to add it to Elastic Container Service upon creation.
+
+#### ELB Security Group Creation
+Go to `Security Groups` under `VPC` and create one.
+
+![ELB Security Group Creation](assets/aws/elb_sec_group_create.png)
+
+
+| Setting | Option |
+|-- |-- |
+| Name | XKCDAppElasticLoadBalancerSecurityGroup |
+| Description | XKCDApps Elastic Load Balancer Security Group. 
+| VPC | Select your VPC, or use the default one. |
+| Inbound Rules | Type: `HTTP`, Source: `Anywhere` |
+| Inbound Rules | Type: `HTTPS` Source: `Anywhere` |
+| Inbound Rules | Type: `CustomTCP`, Port Range: `8000`, Source: `Anywhere` |
+| Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
+
+
+#### ELB Creation
+
+Go to `Load Balancers` under `EC2` and click on Create Load Balancer button and select `Application Load Balancer`.
+
+##### Step 1: Configure Load Balancer
+![ELB Creation: Configuring load balancer](assets/aws/elb_create_1.png)
+
+
+For Availability Zones, you should remember you AZ choices, as you will need to use same configuration for Elastic Container Service creation.
+
+![ELB Creation: Configuring availability zones](assets/aws/elb_create_2.png)
+
+| Setting | Option |
+|-- |-- |
+| Load Balancer Type | Application Load Balancer |
+| Name |  XKCDAppELB |
+| Scheme  | internet-facing  |
+| IP address type | ipv4 |
+| Listeners | HTTP: 80  |
+| Listeners | HTTP: 8000 |
+| Availability Zones | 2a, 2b, 2c |
+
+##### Step 2: Security Settings
+![ELB Creation: Target Group creation](assets/aws/elb_create_3.png)
+We are not going to use HTTPS for this demo, feel free to skip this step.
+
+##### Step 3: Security Groups
+
+![ELB Creation: Target Group creation](assets/aws/elb_create_4.png)
+##### Step 4: Routing: Target Group Creation
+
+![ELB Creation: Target Group creation](assets/aws/elb_create_5.png)
+ECS will not going to use 
+| Setting | Option |
+|-- |-- |
+| Target Group | New target group |
+| Name |  XKCDAppClusterServiceTargetGroup |
+| Target Type  | IP  |
+| Protocol | HTTP |
+| Port | 8000  |
+| Protocol version | HTTP1 |
+| Health Checks: Protocol | HTTP  |
+| Health Checks: Path | / |
+
+##### Step 5: Registering Targets to Target Group
+
+Feel free to skip this step, ECS will going to manage target groups.
+
+##### Step 6: Review
+Click on create button. And when you go back to Load Balancers console, you should see something like this. 
+| Name| DNS name | state |
+| --|-- |-- |
+|XKCDAppELB| XKCDAppELB-123456789.eu-west-2.elb.amazonaws.com| provisioning|
+
+We will be using the DNS name to connect to our ECS instances.
+
+##### Step 7: Forward traffic from port 80 to port 8000 -------------------
+
+elb_port_fwd_1.png
+elb_port_fwd_2.png
+
+
+ 
 ### Elastic Container Service
-#### ExecutionRole, Security Group
+#### Creating an ECS IAM Role: XKCDAppECSTaskExecutionRole
 
 Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 1. AmazonECSTaskExecutionRolePolicy (aws managed)
@@ -696,9 +792,10 @@ Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 
 ![ECS Task Role Creation](assets/aws/ecs_task_role_create.png)
 
-#### create security group
+#### Creating ECS security group: XKCDAppECSSecurityGroup
 
-![](assets/aws/ecs_security_group.png)
+![Creating ECS security group: XKCDAppECSSecurityGroup](assets/aws/ecs_security_group.png)
+
 | Setting | Option |
 |-- |-- |
 | Name | XKCDAppECSSecurityGroup |
@@ -709,28 +806,182 @@ Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 | Outbound Rules | Type: `All Trafic`, Destination: `Anywhere` |
 
 
-#### create a task definition
+#### Creating Task Definition: XKCDAppTaskDefinition
 Go to `Task Definitions` under `Elastic Container Service` and create task definition.
 
 ![](assets/aws/ecs_task_def_1.png)
 ![](assets/aws/ecs_task_def_2.png)
+
+| Setting | Option |
+| -- | -- |
+| Launch Type | Fargate |
+| Name | XKCDAppTaskDefinition |
+|  Task Role | XKCDAppECSTaskExecutionRole |
+|  Network mode |awsvpc  |
+| Task Execution Role | ecsTaskExecutionRole |
+| Task Memory | 2 GiB |
+| Task CPU | 1vCPU  |
+
+##### Adding a container to XKCDAppTaskDefinition
+
+Click on `Add container` button under the section `Container Definitions`
+
 ![](assets/aws/ecs_task_def_container.png)
 
+Remember to append `:latest` tag to your Elastic Container Registry URI.
+| Setting | Option |
+| -- | -- |
+| Container name | XKCDAppContainer |
+|  Image | 12345678912.dkr.ecr.eu-west-2.amazonaws.com/xkcdapp:latest |
+|  Port Mappings | 8000 TCP  |
+|  Port Mappings | 80 TCP  |
 
-#### create cluster service
-Go to default cluster
-![](assets/aws/ecs_service_create.png)
-![](assets/aws/ecs_service_security_group.png)
+
+#### Creating Cluster Service
+Click on the default cluster on `Clusters` page under `Elastic Container Service`.
+
+![AWS ECS default cluster](assets/aws/ecs_default_cluster_create_service.png)
+
+Click on `Create` button under `Services`.
+##### Step 1: Configure Service 
+![Creating AWS ECS Cluster Service ](assets/aws/ecs_service_create.png)
+| Setting | Option |
+| -- | -- |
+| Launch Type | Fargate |
+| Task Definition | XKCDAppTaskDefinition |
+|  Task Revision| 1(latest) |
+|  Platform Version |Latest  |
+| Cluster| default |
+| Service name | XKCDAppClusterService |
+| Service Type | Replica  |
+| Number of tasks  | 1 |
+| Min healty percent |100 |
+| Max percent |200 |
+
+##### Step 2: Configure Network 
+
+**VPC & Security Group**
+![Selecting AWS ECS Cluster Service Security Group](assets/aws/ecs_service_security_group.png)
+| Setting | Option |
+| -- | -- |
+| Cluster VPC | default |
+| Subnets | 2a, 2b, 2c |
+|  Security Group | Select existing:  XKCDAppECSSecurityGroup|
+|  Auto-assign public IP | ENABLED  |
+
+
+**Load Balancing**
+![Configuring AWS ECS Cluster Service Load Balancing Group](assets/aws/ecs_service_load_balancing.png)
+
+| Setting | Option |
+| -- | -- |
+| Load Balancer Type | Application Load Balancer |
+| Load Balancer Name | xkcdapp-elb |
+
+
+**Container to load balance**
+![Configuring AWS ECS Cluster Service Load Balancing Group](assets/aws/ecs_service_container_to_load_balancer.png)
+
+| Setting | Option |
+| -- | -- |
+| Production Listener Port| 80:HTTP |
+| Production Listener Protocol | HTTP |
+| Target group name | Select existing:  XKCDAppClusterServiceTargetGroup|
+|Target group protocol | HTTP |
+|Target type | IP |
+| Path Pattern | /|
+| Evaluation Order | default |
+| Health check path| / |
+
+
+##### Step 3: Set Auto Scaling
+We will configure auto scaling later. Skip this step for now. 
+
+##### Step 4: Review
+Make sure your changes are correct and click on `Create Service` button.
+
+Go to `Tasks` tab under `Service: XKCDAppClusterService`, and wait for your task's status to be `RUNNING`.
+
+Now you can go to your Elastic Load Balancer's DNS name which is something like this: http://xkcdappelb-12346578.eu-west-2.elb.amazonaws.com:8000/
+
+Remember to append the port `:8000`
+
+
+#### Load Testing our App with Hey
+
+[Hey](https://github.com/rakyll/hey) is an open-source load testing tool. We will be using it to test how well a single container of XKCD App does under load. And with the information we get out of load-testing, we can decide on a good Auto Scaling Policy.
+
+Let's run hey with 100 requests, 1 concurrent request at a time.
+
+```bash
+❯ hey -n 100 -c 1 http://xkcdappelb-123456789.eu-west-2.elb.amazonaws.com:8000/
+
+Summary:
+  Total:	64.8392 secs
+  Slowest:	1.6920 secs
+  Fastest:	0.1304 secs
+  Average:	0.6484 secs
+  Requests/sec:	1.5423
+  
+  Total data:	109851 bytes
+  Size/request:	1098 bytes
+
+Response time histogram:
+  0.130 [1]	|■
+  0.287 [6]	|■■■■■■
+  0.443 [22]	|■■■■■■■■■■■■■■■■■■■■
+  0.599 [7]	|■■■■■■■
+  0.755 [43]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.911 [1]	|■
+  1.067 [16]	|■■■■■■■■■■■■■■■
+  1.224 [2]	|■■
+  1.380 [0]	|
+  1.536 [1]	|■
+  1.692 [1]	|■
+
+
+Latency distribution:
+  10% in 0.3377 secs
+  25% in 0.3638 secs
+  50% in 0.6604 secs
+  75% in 0.7351 secs
+  90% in 1.0325 secs
+  95% in 1.0596 secs
+  99% in 1.6920 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:	0.0065 secs, 0.1304 secs, 1.6920 secs
+  DNS-lookup:	0.0058 secs, 0.0000 secs, 0.5765 secs
+  req write:	0.0000 secs, 0.0000 secs, 0.0001 secs
+  resp wait:	0.6418 secs, 0.1302 secs, 1.5321 secs
+  resp read:	0.0001 secs, 0.0000 secs, 0.0003 secs
+
+Status code distribution:
+  [200]	100 responses
+```
+
+In almost a minute, our application responded to 100 requests and it responded in average of 0.64 second. You can try to experiment with hey, change the request count, update your Task Definition's RAM or vCPU etc.
+
+That's the ideal situation for XKCD App, so we will configure Auto Scaling condition to be 100 requests per minute per instance.
+
+#### creating auto scaling for XKCDAppClusterService
+![Configuring AWS ECS Auto Scaling](assets/aws/ecs_auto_scaling.png)
+![Configuring AWS ECS Auto Scaling Policy](assets/aws/ecs_auto_scaling_policy.png)
+
+##### testing the Auto Scaling Policy
+Normally, XKCDAppClusterService's desired count of instances is 1.
+![Configuring AWS ECS Auto Scaling: POC before](assets/aws/ecs_auto_scaling_poc_before.png)
+
+But when I load-test it again with hey,
+
+```bash
+❯ hey -n 400 -c 10 http://xkcdappelb-123456798.eu-west-2.elb.amazonaws.com:8000/
+```
+I could see that my instance count is increased after cool-down time.
+![Configuring AWS ECS Auto Scaling: POC after](assets/aws/ecs_auto_scaling_poc_after.png)
 
 
 
-#### creating fargate flee
-
-### Elastic Load Balancing
-#### Security Group
-#### creation
-
-### Route53
 ### updating security groups
 --------
 - parameter store + parameterstore Role (seanjziegler)
