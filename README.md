@@ -2,6 +2,11 @@
 
 
 ## Overview
+In this blog post, 
+
+### tech stack
+- PostgreSQL on AWS RDS
+- 
 
 
 ### problems:
@@ -11,12 +16,12 @@
 3. **Logs**:As this post is going to create many instances to serve the application, we
 
 
-### Pre requisites
+### Prerequisites
 
 - Some Django knowledge
 - Minimal Docker knowledge
-- Free-tier AWS Account
-- AWS CLI installed & AWS Credentials set up
+- Free-tier AWS Account & Basic understanding of AWS
+- [AWS CLI](https://aws.amazon.com/cli/) installed & AWS credentials set up
 
 
 ### Index
@@ -33,8 +38,8 @@
 7. serving django with gunicorn on docker
 
 **AWS**
-1. creating parameter store
-2. RDS security group & RDS Creation
+2. AWS Relational Database Service
+1. AWS System Managers Parameter Store
 3. Moving our app secrets to Parameter Store
 4. uploading our docker image to ECR
 5. creating an ELB (ECS will only accept requests from ELB's security group.)
@@ -42,7 +47,9 @@
 7. 
 
 ### AWS Security Groups & IAM Roles
-On this post, whenever we create an AWS Service we will be creating it's Security Group or IAM Role beforehand. 
+On this post, whenever we are going to create an AWS Service we will be creating that service's Security Group or IAM Role beforehand.
+
+All security groups will have fully open inbound/outbound rules at first, and when we are done with the application setup on AWS, we will go and revise the inbound/outbound rules of all security groups. 
 
 ## Coding the XKCD Django App
 
@@ -783,7 +790,7 @@ We will be using the DNS name to connect to our ECS instances, take a note of it
 
 ##### Step 7: Forward traffic from port 80 to port 8000
 
-Go to `Listeners` tab on XKCDAppELB's detail view under `Load balancers`. On port `HTTP: 80` click on `view/edit rules`.
+Go to `Listeners` tab on XKCDAppELB's detail view under `Load balancers`. On listener `HTTP: 80` click on `view/edit rules`.
 
 ![ELB Port Forwarding: Target Group creation](assets/aws/elb_port_fwd_1.png)
 
@@ -794,11 +801,13 @@ Add a rule to forward HTTP:80 traffic to HTTP:8000.
 | Path | * | 
 | Redirect to  | HTTP 8000| 
 | HTTP Code| 301 - Permanently Moved | 
+
+
 ![ELB Port Forwarding: Adding a rule Group creation](assets/aws/elb_port_fwd_2.png)
 
  
 ### Elastic Container Service
-#### Creating an ECS IAM Role: XKCDAppECSTaskExecutionRole
+#### Creating an ECS Task Execution Role: XKCDAppECSTaskExecutionRole
 
 Go to `Role` under `IAM` and click on create Role button. Attach policies below:
 1. AmazonECSTaskExecutionRolePolicy (aws managed)
@@ -890,7 +899,7 @@ Click on `Create` button under `Services`.
 | Setting | Option |
 | -- | -- |
 | Load Balancer Type | Application Load Balancer |
-| Load Balancer Name | xkcdapp-elb |
+| Load Balancer Name | XKCDAppELB |
 
 
 **Container to load balance**
@@ -918,12 +927,12 @@ Go to `Tasks` tab under `Service: XKCDAppClusterService`, and wait for your task
 
 Now you can go to your Elastic Load Balancer's DNS name which is something like this: http://xkcdappelb-12346578.eu-west-2.elb.amazonaws.com:8000/
 
-Remember to append the port `:8000`
+If you haven't done the ELB port forwarding remember to append the port `:8000` to DNS name.
 
 
 #### Load Testing our App with Hey
 
-[Hey](https://github.com/rakyll/hey) is an open-source load testing tool. We will be using it to test how well a single container of XKCD App does under load. And with the information we get out of load-testing, we can decide on a good Auto Scaling Policy.
+[Hey](https://github.com/rakyll/hey) is an open-sourced load testing tool. We will be using it to test how well a single container of XKCD App does under load. And with the information we get out of load-testing, we can decide on a good Auto Scaling Policy.
 
 Let's run hey with 100 requests, 1 concurrent request at a time.
 
@@ -997,14 +1006,55 @@ I could see that my instance count is increased after cool-down time.
 
 
 ### updating security groups
---------
-- parameter store + parameterstore Role (seanjziegler)
-- database to aws rds, sec group open
-- session on redis
-- 
+Our XKCD App runs on the security group configuration of below diagram.
+![](assets/aws/aws_security_groups_diagram.png)
+
+If we follow the access through the security groups, we can come up with a inbound/outbound access table:
+
+| inbound | outbound |
+| -- | -- | 
+| Public Internet | XKCDAppElasticLoadBalancerSecurityGroup| 
+| XKCDAppElasticLoadBalancerSecurityGroup | XKCDAppECSSecurityGroup | 
+| XKCDAppECSSecurityGroup | XKCDAppElastiCacheSecurityGroup | 
+| XKCDAppECSSecurityGroup | XKCDAppRDSSecurityGroup| 
+
+Let's update our security groups. Go to `Security Groups` under `VPC`.
+
+#### XKCDAppElasticLoadBalancerSecurityGroup
+
+Select `XKCDAppElasticLoadBalancerSecurityGroup` and edit the rules.
+
+| Rule Type | Type | Destination Type | Destination |
+|-- |-- |-- | -- |
+| Inbound | HTTP:80| Anywhere |  | 
+| Inbound | Custom TCP: 8000 |Custom | Anywhere | 
+| Outbound | All Traffic  | Custom | XKCDAppECSSecurityGroup | 
+
+#### XKCDAppECSSecurityGroup
+
+Select `XKCDAppECSSecurityGroup` and edit the rules.
+
+| Rule Type | Type | Destination Type | Destination |
+|-- |-- |-- | -- |
+| Inbound | HTTP:80| Custom | XKCDAppElasticLoadBalancerSecurityGroup | 
+| Inbound | Custom TCP: 8000 |Custom | XKCDAppElasticLoadBalancerSecurityGroup | 
+| Outbound | All Traffic  | Anywhere |   | 
+| Outbound | Custom TCP: 6379  | Custom | XKCDAppElastiCacheSecurityGroup | 
+| Outbound | Custom TCP: 5432  | Custom | XKCDAppRDSSecurityGroup | 
+
+#### XKCDAppElastiCacheSecurityGroup
+
+Select `XKCDAppElastiCacheSecurityGroup` and edit the rules.
+
+| Rule Type | Type | Destination Type | Destination |
+|-- |-- |-- | -- |
+| Inbound | TCP: 6379| Custom | XKCDAppECSSecurityGroup | 
 
 
-- dockerize - upload to ecr 
-- ecs - hey benchmark - autoscaling group
-- elb
-- acm certificate
+#### XKCDAppRDSSecurityGroup
+
+Select `XKCDAppRDSSecurityGroup` and edit the rules.
+
+| Rule Type | Type | Destination Type | Destination |
+|-- |-- |-- | -- |
+| Inbound | TCP: 5432| Custom | XKCDAppECSSecurityGroup | 
