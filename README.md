@@ -2,25 +2,16 @@
 
 
 ## Overview
-In this blog post, 
+In this blog post, we will create a small Django application and dockerize it. Then we will be using the docker image to deploy the appliction to AWS Elastic Conatiner Service with Auto Scaling. 
 
-### tech stack
-- PostgreSQL on AWS RDS
-- 
-
-
-### problems:
-1. **Session**: When you want to scale a monolithic framework such as Django, you probably want to avoid hitting your database too much. Django defaults to [database as the session storage](https://docs.djangoproject.com/en/dev/topics/http/sessions/#configuring-sessions), but in this post we will be creating a AWS ElastiCache Redis instance to write/read our sessions.
-2. **Static Files**: XKCD App will not require  
-
-3. **Logs**:As this post is going to create many instances to serve the application, we
+Django's sessions will be stored on a AWS ElastiCache Redis server to avoid hitting the database too much. We will also be using AWS Systems Manager Parameter Store to store our application secrets such as database credentials.
 
 
 ### Prerequisites
 
 - Some Django knowledge
 - Minimal Docker knowledge
-- Free-tier AWS Account & Basic understanding of AWS
+- Free-tier AWS Account & Basic understanding of AWS 
 - [AWS CLI](https://aws.amazon.com/cli/) installed & AWS credentials set up
 
 
@@ -36,15 +27,15 @@ In this blog post,
 7. Creating homepage.html
 8. Creating requirements.txt file
 9. Dockerizing our Django App
-   9.1 testing the Docker Image
+   1. testing the Docker Image
 
 **Configuring AWS**
 1. AWS RDS - Relational Database Service
-   1.1. Configuring RDS Security Group
-   1.2. Creating a Postgresql Database on RDS 
-   1.3. Updating Django settings to use the PostgreSQL Database Backend
-      1.3.1. Install the PostgreSQL library
-      1.3.2. Update the settings.py
+   1. Configuring RDS Security Group
+   2. Creating a Postgresql Database on RDS 
+   3. Updating Django settings to use the PostgreSQL Database Backend
+      1. Install the PostgreSQL library
+      2. Update the settings.py
 2. AWS Systems Manager Parameter Store
    1. Adding our secrets to Parameter Store
    2. Configuring Django App to use AWS Parameter Store
@@ -83,10 +74,13 @@ In this blog post,
       3. Step 3: Set Auto Scaling
       4. Step 4: Review
    5. Load Testing our App with Hey
-   6. Creating auto scaling for XKCDAppClusterService
+   6. Creating Auto Scaling for XKCDAppClusterService
       1. Testing the Auto Scaling Policy
-7. Updating security groups
-
+7. Updating Security Groups
+   1. Updating XKCDAppElasticLoadBalancerSecurityGroup
+   2. Updating XKCDAppECSSecurityGroup
+   3. Updating XKCDAppElastiCacheSecurityGroup
+   4. Updating XKCDAppRDSSecurityGroup
 
 ### About AWS Security Groups & IAM Roles
 On this blog post, whenever we are going to create an AWS Service we will be creating that service's Security Group or IAM Role beforehand.
@@ -1038,7 +1032,7 @@ In almost a minute, our application responded to 100 requests and it responded i
 
 That's the ideal situation for XKCD App, so we will configure Auto Scaling condition to be 100 requests per minute per instance.
 
-#### 6.6 Creating auto scaling for XKCDAppClusterService
+#### 6.6 Creating Auto Scaling for XKCDAppClusterService
 Go to `XKCDAppClusterService` under default cluster and click update.
 ![Configuring AWS ECS Auto Scaling](assets/aws/ecs_auto_scaling.png)
 
@@ -1059,7 +1053,8 @@ I could see that my instance count is increased after cool-down time.
 
 
 
-### 7. Updating security groups
+### 7. Updating Security Groups
+
 Our XKCD App runs on the security group configuration of below diagram.
 ![](assets/aws/aws_security_groups_diagram.png)
 
@@ -1074,7 +1069,7 @@ If we follow the access through the security groups, we can come up with a inbou
 
 Let's update our security groups. Go to `Security Groups` under `VPC`.
 
-#### 7.1 XKCDAppElasticLoadBalancerSecurityGroup
+#### 7.1 Updating XKCDAppElasticLoadBalancerSecurityGroup
 
 Select `XKCDAppElasticLoadBalancerSecurityGroup` and edit the rules.
 
@@ -1084,7 +1079,7 @@ Select `XKCDAppElasticLoadBalancerSecurityGroup` and edit the rules.
 | Inbound | Custom TCP: 8000 |Custom | Anywhere | 
 | Outbound | All Traffic  | Custom | XKCDAppECSSecurityGroup | 
 
-#### 7.2 XKCDAppECSSecurityGroup
+#### 7.2 Updating XKCDAppECSSecurityGroup
 
 Select `XKCDAppECSSecurityGroup` and edit the rules.
 
@@ -1096,7 +1091,7 @@ Select `XKCDAppECSSecurityGroup` and edit the rules.
 | Outbound | Custom TCP: 6379  | Custom | XKCDAppElastiCacheSecurityGroup | 
 | Outbound | Custom TCP: 5432  | Custom | XKCDAppRDSSecurityGroup | 
 
-#### 7.3 XKCDAppElastiCacheSecurityGroup
+#### 7.3 Updating XKCDAppElastiCacheSecurityGroup
 
 Select `XKCDAppElastiCacheSecurityGroup` and edit the rules.
 
@@ -1105,7 +1100,7 @@ Select `XKCDAppElastiCacheSecurityGroup` and edit the rules.
 | Inbound | TCP: 6379| Custom | XKCDAppECSSecurityGroup | 
 
 
-#### 7.4 XKCDAppRDSSecurityGroup
+#### 7.4 Updating XKCDAppRDSSecurityGroup
 
 Select `XKCDAppRDSSecurityGroup` and edit the rules.
 
