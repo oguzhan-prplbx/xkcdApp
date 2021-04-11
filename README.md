@@ -190,13 +190,16 @@ urlpatterns = [
 <body>
   <div class="container">
     <div class="row" style="margin-top:15px">
-        <div class="col-sm-8 mx-auto">
+        <div class="col-xs-8 col-sm-10 mx-auto col-md-12">
             <div class="col text-center">
                 <h2 class="header" >#{{number}} | {{title}}</h2>
             <hr/>
             <img src="{{image_link}}" class="img-fluid" alt="{{alt_text}}" />
             <hr/>
                 <a class="btn btn-default" href="{% url 'homepage' %}">Another One</a>
+               <hr/>
+               <a rel="license" href="http://creativecommons.org/licenses/by-nc/2.5/"><img alt="Creative Commons License" style="border:none" src="http://creativecommons.org/images/public/somerights20.png"></a>
+               All credits for comics belongs to <a href="https://xkcd.com/license.html">XKCD.</a></p>
             </div>
         </div>
     </div>
@@ -493,7 +496,6 @@ python manage.py migrate
 #   Applying sessions.0001_initial... OK
 #   Applying xkcd_app.0001_initial... OK
 ```
-#####
 
 
 ##### build & run the docker image with the aws credentials
@@ -559,7 +561,7 @@ Give a name and description to Parameter Store access role.
 We will be attaching this IAM Role to ECS containers we are going to run to allow them to read the parameters.
 
 
-#####creating a super user
+##### creating a super user
 ```bash
 python3 manage.py createsuperuser
 ```
@@ -640,7 +642,7 @@ Go to `Parameter Store` under `AWS Systems Manager` and add `ELASTICACHE_ENDPOIN
 
 
 | Setting | Option | 
-| --| --| --|
+| --| --|
 | Name | xkcdapp/test/ELASTICACHE_ENDPOINT | 
 | Description | xkcd app ElastiCache Redis Endpoint | 
 | Tier | Standard |
@@ -744,15 +746,17 @@ For Availability Zones, you should remember you AZ choices, as you will need to 
 
 ##### Step 2: Security Settings
 ![ELB Creation: Target Group creation](assets/aws/elb_create_3.png)
+
 We are not going to use HTTPS for this demo, feel free to skip this step.
 
 ##### Step 3: Security Groups
 
 ![ELB Creation: Target Group creation](assets/aws/elb_create_4.png)
+
 ##### Step 4: Routing: Target Group Creation
 
 ![ELB Creation: Target Group creation](assets/aws/elb_create_5.png)
-ECS will not going to use 
+
 | Setting | Option |
 |-- |-- |
 | Target Group | New target group |
@@ -770,17 +774,27 @@ Feel free to skip this step, ECS will going to manage target groups.
 
 ##### Step 6: Review
 Click on create button. And when you go back to Load Balancers console, you should see something like this. 
+
 | Name| DNS name | state |
 | --|-- |-- |
 |XKCDAppELB| XKCDAppELB-123456789.eu-west-2.elb.amazonaws.com| provisioning|
 
-We will be using the DNS name to connect to our ECS instances.
+We will be using the DNS name to connect to our ECS instances, take a note of it.
 
-##### Step 7: Forward traffic from port 80 to port 8000 -------------------
+##### Step 7: Forward traffic from port 80 to port 8000
 
-elb_port_fwd_1.png
-elb_port_fwd_2.png
+Go to `Listeners` tab on XKCDAppELB's detail view under `Load balancers`. On port `HTTP: 80` click on `view/edit rules`.
 
+![ELB Port Forwarding: Target Group creation](assets/aws/elb_port_fwd_1.png)
+
+Add a rule to forward HTTP:80 traffic to HTTP:8000.
+
+| Setting | Option | 
+| --|-- | 
+| Path | * | 
+| Redirect to  | HTTP 8000| 
+| HTTP Code| 301 - Permanently Moved | 
+![ELB Port Forwarding: Adding a rule Group creation](assets/aws/elb_port_fwd_2.png)
 
  
 ### Elastic Container Service
